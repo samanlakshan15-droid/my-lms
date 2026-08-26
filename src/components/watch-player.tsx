@@ -93,7 +93,7 @@ export default function WatchPlayer({ title, embedUrl, html5VideoUrl, expiresAtI
 
       {isExpired ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
-          Your watching time is over. Please contact your teacher for more access time.
+          Your watching time is over. Please contact admin for more access time.
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-black">
