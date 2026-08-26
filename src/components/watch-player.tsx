@@ -102,7 +102,7 @@ export default function WatchPlayer({ title, embedUrl, html5VideoUrl, expiresAtI
               className="h-auto w-full"
               src={html5VideoUrl}
               controls
-              controlsList="nodownload noplaybackrate nofullscreen"
+              controlsList="nodownload noplaybackrate"
               disablePictureInPicture
               disableRemotePlayback
               onContextMenu={(e) => e.preventDefault()}
