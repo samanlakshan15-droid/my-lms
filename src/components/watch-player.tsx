@@ -275,7 +275,7 @@ export default function WatchPlayer({
         <div ref={playerShellRef} className="video-shell relative overflow-hidden rounded-xl border border-slate-200 bg-black">
   {/* Bottom Left එකේ තියෙන Share / YouTube Logo Block කරන Transparent Cover එක */}
   <div 
-    className="absolute bottom-0 left-0 w-48 h-16 z-10 bg-transparent"
+    className="absolute bottom-0 left-0 w-32 h-12 sm:w-48 sm:h-16 md:w-64 md:h-20 z-10 bg-transparent"
     onContextMenu={(e) => e.preventDefault()}
     onMouseDown={(e) => e.preventDefault()}
   />
