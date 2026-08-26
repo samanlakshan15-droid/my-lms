@@ -13,7 +13,6 @@ type WatchPlayerProps = {
 type YouTubePlayer = {
   pauseVideo: () => void;
   getPlayerState: () => number;
-  getIframe: () => HTMLIFrameElement; // Added this to access the iframe and block sharing
 };
 
 type YouTubeWindow = Window & typeof globalThis & {
@@ -21,12 +20,7 @@ type YouTubeWindow = Window & typeof globalThis & {
     Player: new (
       elementId: string,
       options: {
-        videoId: string;
-        width: string;
-        height: string;
-        playerVars?: Record<string, string | number>;
         events?: {
-          onReady?: (event: { target: YouTubePlayer }) => void;
           onStateChange?: (event: { data: number }) => void;
         };
       },
@@ -188,33 +182,14 @@ export default function WatchPlayer({
     const createPlayer = () => {
       if (!w.YT?.Player) return;
 
+      // Existing Iframe එකට YouTube API එක connect කරනවා
       youtubePlayerRef.current = new w.YT.Player(youtubeTargetId, {
-        videoId: youtubeVideoId,
-        width: "100%",
-        height: "520",
-        playerVars: {
-          rel: 0,
-          modestbranding: 1,
-          controls: 1,
-          disablekb: 1,
-          playsinline: 1,
-          fs: 1, // Fullscreen allowed
-          iv_load_policy: 3,
-          origin: window.location.origin,
-        },
         events: {
-          onReady: (event) => {
-            // Apply sandbox to the generated iframe to block share links/popups
-            const iframe = event.target.getIframe();
-            if (iframe) {
-              iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
-            }
-          },
           onStateChange: (event) => {
             if (event.data === 1 && !isExpired) {
-              setIsPlaying(true);
+              setIsPlaying(true); // Playing
             } else if (event.data === 2 || event.data === 0 || event.data === 5) {
-              setIsPlaying(false);
+              setIsPlaying(false); // Paused or Ended
               void flushProgress();
             }
           },
@@ -251,6 +226,12 @@ export default function WatchPlayer({
       // ignore fullscreen rejection
     }
   };
+
+  // YouTube embed URL එක හදනවා parameters එක්ක (enablejsapi=1 අනිවාර්යයි API එක වැඩ කරන්න)
+  const youtubeOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const youtubeEmbedUrl = youtubeVideoId 
+    ? `https://www.youtube.com/embed/${youtubeVideoId}?enablejsapi=1&rel=0&modestbranding=1&controls=1&disablekb=1&playsinline=1&fs=1&origin=${youtubeOrigin}`
+    : '';
 
   return (
     <section
@@ -291,14 +272,13 @@ export default function WatchPlayer({
           Your watching time is over. Please contact your teacher for more access time.
         </div>
       ) : (
-        <div ref={playerShellRef} className="video-shell overflow-hidden rounded-xl border border-slate-200 bg-black relative">
+        <div ref={playerShellRef} className="video-shell overflow-hidden rounded-xl border border-slate-200 bg-black">
           {html5VideoUrl ? (
             <video
               ref={html5Ref}
               className="h-auto w-full"
               src={html5VideoUrl}
               controls
-              // Removed noplaybackrate here to allow speed adjustments
               controlsList="nodownload noremoteplayback"
               disablePictureInPicture
               disableRemotePlayback
@@ -315,7 +295,15 @@ export default function WatchPlayer({
               preload="metadata"
             />
           ) : (
-            <div id={youtubeTargetId} className="aspect-video w-full" />
+            <iframe
+              id={youtubeTargetId}
+              className="aspect-video w-full"
+              src={youtubeEmbedUrl}
+              title={title}
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              allowFullScreen
+              sandbox="allow-scripts allow-same-origin allow-presentation"
+            />
           )}
         </div>
       )}
