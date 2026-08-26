@@ -114,7 +114,7 @@ export default function WatchPlayer({ title, embedUrl, html5VideoUrl, expiresAtI
               height="520"
               src={embedUrl ?? ""}
               title={title}
-              allow="autoplay; encrypted-media; picture-in-picture"
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
               referrerPolicy="strict-origin-when-cross-origin"
               allowFullScreen={true}
               sandbox="allow-scripts allow-same-origin allow-presentation"
