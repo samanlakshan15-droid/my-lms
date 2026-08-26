@@ -194,7 +194,7 @@ export default function WatchPlayer({
         playerVars: {
           rel: 0,
           modestbranding: 1,
-          controls: 1,
+          controls: 0,
           disablekb: 1,
           playsinline: 1,
           fs: 1,
@@ -306,8 +306,14 @@ export default function WatchPlayer({
               preload="metadata"
             />
           ) : (
-            <div id={youtubeTargetId} className="aspect-video w-full" />
-          )}
+  <div className="relative overflow-hidden aspect-video w-full rounded-xl bg-black">
+    {/* YouTube Player */}
+    <div id={youtubeTargetId} className="h-full w-full pointer-events-none scale-105" />
+
+    {/* Share Button Block කරන Transparent Shield */}
+    <div className="absolute top-0 left-0 right-0 h-16 z-20 bg-transparent" />
+  </div>
+)}
         </div>
       )}
 
