@@ -275,7 +275,7 @@ export default function WatchPlayer({
         <div ref={playerShellRef} className="video-shell relative overflow-hidden rounded-xl border border-slate-200 bg-black">
   {/* Bottom Left එකේ තියෙන Share / YouTube Logo Block කරන Transparent Cover එක */}
   <div 
-  className="absolute bottom-0 left-0 w-48 h-16 z-50 bg-red-500/50 pointer-events-auto cursor-not-allowed" 
+  className="absolute fullscreen:fixed bottom-0 left-0 w-48 h-16 sm:w-64 sm:h-20 z-[9999] bg-red-500/50 pointer-events-auto cursor-not-allowed" 
   onClick={(e) => {
     e.preventDefault();
     e.stopPropagation();
