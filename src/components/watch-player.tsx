@@ -1,12 +1,38 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 type WatchPlayerProps = {
   title: string;
-  embedUrl?: string;
+  accessId: number;
+  initialRemainingSeconds: number;
+  youtubeVideoId?: string;
   html5VideoUrl?: string;
-  expiresAtIso: string;
+};
+
+type YouTubePlayer = {
+  pauseVideo: () => void;
+  getPlayerState: () => number;
+  getIframe: () => HTMLIFrameElement; // Added this to access the iframe and block sharing
+};
+
+type YouTubeWindow = Window & typeof globalThis & {
+  YT?: {
+    Player: new (
+      elementId: string,
+      options: {
+        videoId: string;
+        width: string;
+        height: string;
+        playerVars?: Record<string, string | number>;
+        events?: {
+          onReady?: (event: { target: YouTubePlayer }) => void;
+          onStateChange?: (event: { data: number }) => void;
+        };
+      },
+    ) => YouTubePlayer;
+  };
+  onYouTubeIframeAPIReady?: () => void;
 };
 
 function formatSeconds(total: number) {
@@ -18,18 +44,82 @@ function formatSeconds(total: number) {
   return [hrs, mins, secs].map((n) => String(n).padStart(2, "0")).join(":");
 }
 
-export default function WatchPlayer({ title, embedUrl, html5VideoUrl, expiresAtIso }: WatchPlayerProps) {
+export default function WatchPlayer({
+  title,
+  accessId,
+  initialRemainingSeconds,
+  youtubeVideoId,
+  html5VideoUrl,
+}: WatchPlayerProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const expiry = useMemo(() => new Date(expiresAtIso).getTime(), [expiresAtIso]);
-  const [remaining, setRemaining] = useState(() => Math.floor((expiry - Date.now()) / 1000));
+  const playerShellRef = useRef<HTMLDivElement | null>(null);
+  const html5Ref = useRef<HTMLVideoElement | null>(null);
+  const youtubePlayerRef = useRef<YouTubePlayer | null>(null);
+  const flushInFlightRef = useRef(false);
+  const consumedBufferRef = useRef(0);
+  const youtubeTargetId = useId().replace(/:/g, "_");
+
+  const [remaining, setRemaining] = useState(() => Math.max(0, Math.floor(initialRemainingSeconds)));
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const isExpired = useMemo(() => remaining <= 0, [remaining]);
+
+  const flushProgress = async () => {
+    const buffered = consumedBufferRef.current;
+    if (buffered <= 0 || flushInFlightRef.current) return;
+
+    flushInFlightRef.current = true;
+    consumedBufferRef.current = 0;
+
+    try {
+      await fetch("/api/watch/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessId, consumedSeconds: buffered }),
+        keepalive: true,
+      });
+    } catch {
+      consumedBufferRef.current += buffered;
+    } finally {
+      flushInFlightRef.current = false;
+    }
+  };
 
   useEffect(() => {
+    if (!isPlaying || isExpired) return;
+
     const timer = setInterval(() => {
-      setRemaining(Math.floor((expiry - Date.now()) / 1000));
+      setRemaining((prev) => {
+        if (prev <= 0) return 0;
+        consumedBufferRef.current += 1;
+        return prev - 1;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [expiry]);
+  }, [isPlaying, isExpired]);
+
+  useEffect(() => {
+    if (consumedBufferRef.current >= 5) {
+      void flushProgress();
+    }
+  }, [remaining]);
+
+  useEffect(() => {
+    if (!isExpired) return;
+
+    setIsPlaying(false);
+
+    if (html5Ref.current) {
+      html5Ref.current.pause();
+    }
+
+    if (youtubePlayerRef.current) {
+      youtubePlayerRef.current.pauseVideo();
+    }
+
+    void flushProgress();
+  }, [isExpired]);
 
   useEffect(() => {
     const inPlayer = (target: EventTarget | null) => {
@@ -48,10 +138,21 @@ export default function WatchPlayer({ title, embedUrl, html5VideoUrl, expiresAtI
 
       const key = event.key.toLowerCase();
       const blocked =
-        (event.ctrlKey || event.metaKey) && ["c", "x", "u", "s", "p", "a"].includes(key);
+        (event.ctrlKey || event.metaKey) && ["c", "x", "u", "s", "p", "a", "i", "j", "v"].includes(key);
 
       if (blocked) {
         event.preventDefault();
+      }
+    };
+
+    const flushOnHide = () => {
+      void flushProgress();
+      setIsPlaying(false);
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        flushOnHide();
       }
     };
 
@@ -61,6 +162,9 @@ export default function WatchPlayer({ title, embedUrl, html5VideoUrl, expiresAtI
     document.addEventListener("dragstart", blockEvent);
     document.addEventListener("selectstart", blockEvent);
     document.addEventListener("keydown", blockKeys);
+    document.addEventListener("auxclick", blockEvent);
+    window.addEventListener("pagehide", flushOnHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       document.removeEventListener("contextmenu", blockEvent);
@@ -69,10 +173,84 @@ export default function WatchPlayer({ title, embedUrl, html5VideoUrl, expiresAtI
       document.removeEventListener("dragstart", blockEvent);
       document.removeEventListener("selectstart", blockEvent);
       document.removeEventListener("keydown", blockKeys);
+      document.removeEventListener("auxclick", blockEvent);
+      window.removeEventListener("pagehide", flushOnHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      void flushProgress();
     };
-  }, []);
+  }, [accessId]);
 
-  const isExpired = remaining <= 0;
+  useEffect(() => {
+    if (!youtubeVideoId || html5VideoUrl) return;
+
+    const w = window as YouTubeWindow;
+
+    const createPlayer = () => {
+      if (!w.YT?.Player) return;
+
+      youtubePlayerRef.current = new w.YT.Player(youtubeTargetId, {
+        videoId: youtubeVideoId,
+        width: "100%",
+        height: "520",
+        playerVars: {
+          rel: 0,
+          modestbranding: 1,
+          controls: 1,
+          disablekb: 1,
+          playsinline: 1,
+          fs: 1, // Fullscreen allowed
+          iv_load_policy: 3,
+          origin: window.location.origin,
+        },
+        events: {
+          onReady: (event) => {
+            // Apply sandbox to the generated iframe to block share links/popups
+            const iframe = event.target.getIframe();
+            if (iframe) {
+              iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
+            }
+          },
+          onStateChange: (event) => {
+            if (event.data === 1 && !isExpired) {
+              setIsPlaying(true);
+            } else if (event.data === 2 || event.data === 0 || event.data === 5) {
+              setIsPlaying(false);
+              void flushProgress();
+            }
+          },
+        },
+      });
+    };
+
+    if (w.YT?.Player) {
+      createPlayer();
+      return;
+    }
+
+    const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+
+    if (!existing) {
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+
+    const prev = w.onYouTubeIframeAPIReady;
+    w.onYouTubeIframeAPIReady = () => {
+      prev?.();
+      createPlayer();
+    };
+  }, [youtubeVideoId, html5VideoUrl, youtubeTargetId, isExpired]);
+
+  const requestFullscreen = async () => {
+    if (!playerShellRef.current) return;
+    try {
+      await playerShellRef.current.requestFullscreen();
+    } catch {
+      // ignore fullscreen rejection
+    }
+  };
 
   return (
     <section
@@ -81,7 +259,12 @@ export default function WatchPlayer({ title, embedUrl, html5VideoUrl, expiresAtI
       onContextMenu={(e) => e.preventDefault()}
       onCopy={(e) => e.preventDefault()}
       onCut={(e) => e.preventDefault()}
+      onPaste={(e) => e.preventDefault()}
       onDragStart={(e) => e.preventDefault()}
+      onAuxClick={(e) => e.preventDefault()}
+      onMouseDown={(e) => {
+        if (e.button === 2) e.preventDefault();
+      }}
       style={{ userSelect: "none", WebkitUserSelect: "none" }}
     >
       <div className="flex items-center justify-between gap-4">
@@ -91,40 +274,54 @@ export default function WatchPlayer({ title, embedUrl, html5VideoUrl, expiresAtI
         </p>
       </div>
 
+      {!isExpired ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={requestFullscreen}
+            className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition"
+          >
+            Fullscreen
+          </button>
+        </div>
+      ) : null}
+
       {isExpired ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
-          Your watching time is over. Please contact admin for more access time.
+          Your watching time is over. Please contact your teacher for more access time.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-black">
+        <div ref={playerShellRef} className="video-shell overflow-hidden rounded-xl border border-slate-200 bg-black relative">
           {html5VideoUrl ? (
             <video
+              ref={html5Ref}
               className="h-auto w-full"
               src={html5VideoUrl}
               controls
-              controlsList="nodownload noplaybackrate nofullscreen"
+              // Removed noplaybackrate here to allow speed adjustments
+              controlsList="nodownload noremoteplayback"
               disablePictureInPicture
               disableRemotePlayback
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => {
+                setIsPlaying(false);
+                void flushProgress();
+              }}
+              onEnded={() => {
+                setIsPlaying(false);
+                void flushProgress();
+              }}
               onContextMenu={(e) => e.preventDefault()}
               preload="metadata"
             />
           ) : (
-            <iframe
-              width="100%"
-              height="520"
-              src={embedUrl ?? ""}
-              title={title}
-              allow="autoplay; encrypted-media; picture-in-picture"
-              referrerPolicy="strict-origin-when-cross-origin"
-              allowFullScreen={false}
-              sandbox="allow-scripts allow-same-origin allow-presentation"
-            />
+            <div id={youtubeTargetId} className="aspect-video w-full" />
           )}
         </div>
       )}
 
       <p className="text-xs text-slate-500">
-        Share options, copy actions, right-click menu, and direct download functionality are disabled in the LMS player.
+        Timer counts down only while video playback is active. Pausing or stopping the video pauses the timer.
       </p>
     </section>
   );
