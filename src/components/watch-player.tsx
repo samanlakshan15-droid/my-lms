@@ -307,12 +307,12 @@ export default function WatchPlayer({
             />
           ) : (
   <div className="relative overflow-hidden aspect-video w-full rounded-xl bg-black">
-    {/* YouTube Player */}
-    <div id={youtubeTargetId} className="h-full w-full pointer-events-none scale-105" />
+  {/* YouTube Player (pointer-events-none ඉවත් කර ඇත) */}
+  <div id={youtubeTargetId} className="h-full w-full scale-105" />
 
-    {/* Share Button Block කරන Transparent Shield */}
-    <div className="absolute top-0 left-0 right-0 h-16 z-20 bg-transparent" />
-  </div>
+  {/* Share Button & Top Bar Block කරන Transparent Shield */}
+  <div className="absolute top-0 left-0 right-0 h-16 z-20 bg-transparent" />
+</div>
 )}
         </div>
       )}
