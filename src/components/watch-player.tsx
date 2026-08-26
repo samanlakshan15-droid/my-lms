@@ -272,40 +272,47 @@ export default function WatchPlayer({
           Your watching time is over. Please contact your teacher for more access time.
         </div>
       ) : (
-        <div ref={playerShellRef} className="video-shell overflow-hidden rounded-xl border border-slate-200 bg-black">
-          {html5VideoUrl ? (
-            <video
-              ref={html5Ref}
-              className="h-auto w-full"
-              src={html5VideoUrl}
-              controls
-              controlsList="nodownload noremoteplayback"
-              disablePictureInPicture
-              disableRemotePlayback
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => {
-                setIsPlaying(false);
-                void flushProgress();
-              }}
-              onEnded={() => {
-                setIsPlaying(false);
-                void flushProgress();
-              }}
-              onContextMenu={(e) => e.preventDefault()}
-              preload="metadata"
-            />
-          ) : (
-            <iframe
-              id={youtubeTargetId}
-              className="aspect-video w-full"
-              src={youtubeEmbedUrl}
-              title={title}
-              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-              allowFullScreen
-              sandbox="allow-scripts allow-same-origin allow-presentation"
-            />
-          )}
-        </div>
+        <div ref={playerShellRef} className="video-shell relative overflow-hidden rounded-xl border border-slate-200 bg-black">
+  {/* Bottom Left එකේ තියෙන Share / YouTube Logo Block කරන Transparent Cover එක */}
+  <div 
+    className="absolute bottom-0 left-0 w-48 h-16 z-10 bg-transparent"
+    onContextMenu={(e) => e.preventDefault()}
+    onMouseDown={(e) => e.preventDefault()}
+  />
+
+  {html5VideoUrl ? (
+    <video
+      ref={html5Ref}
+      className="h-auto w-full"
+      src={html5VideoUrl}
+      controls
+      controlsList="nodownload noremoteplayback"
+      disablePictureInPicture
+      disableRemotePlayback
+      onPlay={() => setIsPlaying(true)}
+      onPause={() => {
+        setIsPlaying(false);
+        void flushProgress();
+      }}
+      onEnded={() => {
+        setIsPlaying(false);
+        void flushProgress();
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+      preload="metadata"
+    />
+  ) : (
+    <iframe
+      id={youtubeTargetId}
+      className="aspect-video w-full"
+      src={youtubeEmbedUrl}
+      title={title}
+      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+      allowFullScreen
+      sandbox="allow-scripts allow-same-origin allow-presentation"
+    />
+  )}
+</div>
       )}
 
       <p className="text-xs text-slate-500">
