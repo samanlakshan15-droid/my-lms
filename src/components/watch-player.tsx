@@ -306,13 +306,7 @@ export default function WatchPlayer({
               preload="metadata"
             />
           ) : (
-            <div className="relative overflow-hidden aspect-video w-full rounded-xl bg-black">
-              {/* YouTube Player */}
-              <div id={youtubeTargetId} className="h-full w-full scale-105" />
-
-              {/* Top Shield: Share & Title area එක Block කිරීම */}
-              <div className="absolute top-0 left-0 right-0 h-16 z-20 bg-transparent" />
-            </div>
+            <div id={youtubeTargetId} className="aspect-video w-full" />
           )}
         </div>
       )}
